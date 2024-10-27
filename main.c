@@ -18,10 +18,6 @@ typedef struct LinkedList_ {
   HuffNode *head;
 } LinkedList;
 
-typedef struct BinaryTree_ {
-  HuffNode *root;
-} BinaryTree;
-
 // Creates a new node
 HuffNode *create_node(char ch, int freq) {
   HuffNode *newNode = (HuffNode *)malloc(sizeof(HuffNode));
@@ -31,20 +27,6 @@ HuffNode *create_node(char ch, int freq) {
   newNode->right = NULL;
   newNode->next = NULL;
   return newNode;
-}
-
-// Insert a new node in a Binary Tree
-HuffNode *insert_tree(HuffNode *root, char ch, int freq) {
-  if (root == NULL)
-    return create_node(ch, freq);
-
-  if (freq < root->frequency)
-    root->left = insert_tree(root->left, ch, freq);
-  else if (freq > root->frequency) {
-    root->right = insert_tree(root->right, ch, freq);
-  }
-
-  return root;
 }
 
 // Frees the memory allocated for a Binary Tree
@@ -126,16 +108,6 @@ void print_levels(HuffNode *root) {
   free(queue);
 }
 
-// Checks if a node is a leaf
-bool is_leaf(HuffNode *node) {
-  return (node->left == NULL && node->right == NULL);
-}
-
-// Compare the frequency between two nodes
-int compare_freq(HuffNode node1, HuffNode node2) {
-  return node1.frequency - node2.frequency;
-}
-
 FILE *file_handler() {
   // Opens a file called "text.txt"
   FILE *fp = fopen("text.txt", "r");
@@ -162,21 +134,6 @@ FILE *file_handler() {
 
   return fp;
 }
-
-// Sets the frequency for each char in the file
-/* void char_frequency(int *frequency) { */
-/*   FILE *fp = file_handler(); */
-/*   int file_position = 0; */
-/*  */
-/*   int c; */
-/*   while ((c = fgetc(fp)) != EOF) */
-/*     if (c != '\n') { */
-/*       frequency[c]++; */
-/*       file_position++; */
-/*     } */
-/*  */
-/*   fclose(fp); */
-/* } */
 
 // Sets the frequency for each char in the file
 void char_frequency(int *frequency) {
@@ -241,7 +198,7 @@ HuffNode *remove_node(LinkedList *list) {
 
 // Creates a new node (parent) with the summed frequency of the first two
 void sum_frequency(LinkedList *list) {
-  // The first and second will also be used as the left and right of the parent.
+  // The first and second will also be used as the left and right of the parent
   HuffNode *left = remove_node(list);
   HuffNode *right = remove_node(list);
 
@@ -254,13 +211,13 @@ void sum_frequency(LinkedList *list) {
   print_list(list->head);
 }
 
-void insert_parent_tree(LinkedList *list) {
+// Builds a Huffman Tree
+void build_huffman_tree(LinkedList *list) {
   while (list->head != NULL && list->head->next != NULL) {
     sum_frequency(list);
   }
-
-  printf("\n\nlist: must have 1 node (which will be used as root)\n");
-  print_list(list->head);
+  /* printf("\n\nlist: must have 1 node (which will be used as root)\n"); */
+  /* print_list(list->head); */
 }
 
 int main(void) {
@@ -280,7 +237,7 @@ int main(void) {
 
   print_list(list->head);
 
-  insert_parent_tree(list);
+  build_huffman_tree(list);
   print_levels(list->head);
 
   free_list(list->head);
