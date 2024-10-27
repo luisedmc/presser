@@ -18,6 +18,10 @@ typedef struct LinkedList_ {
   HuffNode *head;
 } LinkedList;
 
+typedef struct BinaryTree_ {
+  HuffNode *root;
+} BinaryTree;
+
 // Creates a new node
 HuffNode *create_node(char ch, int freq) {
   HuffNode *newNode = (HuffNode *)malloc(sizeof(HuffNode));
@@ -29,14 +33,15 @@ HuffNode *create_node(char ch, int freq) {
   return newNode;
 }
 
-HuffNode *insert(HuffNode *root, char ch, int freq) {
+// Insert a new node in a Binary Tree
+HuffNode *insert_tree(HuffNode *root, char ch, int freq) {
   if (root == NULL)
     return create_node(ch, freq);
 
   if (freq < root->frequency)
-    root->left = insert(root->left, ch, freq);
+    root->left = insert_tree(root->left, ch, freq);
   else if (freq > root->frequency) {
-    root->right = insert(root->right, ch, freq);
+    root->right = insert_tree(root->right, ch, freq);
   }
 
   return root;
@@ -70,6 +75,57 @@ void print_list(HuffNode *head) {
   }
 }
 
+void print_levels(HuffNode *root) {
+  if (root == NULL) {
+    printf("Tree is empty\n");
+    return;
+  }
+
+  // Create a queue to store nodes
+  HuffNode **queue =
+      (HuffNode **)malloc(1000 * sizeof(HuffNode *)); // Adjust size as needed
+  int front = 0;
+  int rear = 0;
+
+  // Enqueue root
+  queue[rear++] = root;
+
+  // Keep track of current level
+  int level = 0;
+  printf("\n--- Level %d ---\n", level);
+
+  while (front < rear) {
+    // Calculate nodes in current level
+    int level_size = rear - front;
+
+    // Process all nodes of current level
+    for (int i = 0; i < level_size; i++) {
+      // Dequeue node and print it
+      HuffNode *current = queue[front++];
+      printf("Char: %c\tFreq: %d\t", current->data, current->frequency);
+
+      // Enqueue left child
+      if (current->left != NULL) {
+        queue[rear++] = current->left;
+      }
+
+      // Enqueue right child
+      if (current->right != NULL) {
+        queue[rear++] = current->right;
+      }
+    }
+
+    // Print new line after each level
+    printf("\n");
+    level++;
+    if (front < rear) { // If there are more levels
+      printf("\n--- Level %d ---\n", level);
+    }
+  }
+
+  free(queue);
+}
+
 // Checks if a node is a leaf
 bool is_leaf(HuffNode *node) {
   return (node->left == NULL && node->right == NULL);
@@ -95,12 +151,12 @@ FILE *file_handler() {
 
   /* Function ftell returns the current value of the file position indicator for
    * the stream */
-  long int fpi = ftell(fp);
-  if (fpi == -1L) { // Success
+  long fpi = ftell(fp);
+  if (fpi == -1L) { // ftell failed
     perror("Tell");
     return NULL;
   }
-  printf("file position = %ld\n", fpi); // bytes
+  /* printf("file position = %ld\n", fpi); // bytes */
 
   rewind(fp);
 
@@ -108,30 +164,59 @@ FILE *file_handler() {
 }
 
 // Sets the frequency for each char in the file
+/* void char_frequency(int *frequency) { */
+/*   FILE *fp = file_handler(); */
+/*   int file_position = 0; */
+/*  */
+/*   int c; */
+/*   while ((c = fgetc(fp)) != EOF) */
+/*     if (c != '\n') { */
+/*       frequency[c]++; */
+/*       file_position++; */
+/*     } */
+/*  */
+/*   fclose(fp); */
+/* } */
+
+// Sets the frequency for each char in the file
 void char_frequency(int *frequency) {
   FILE *fp = file_handler();
 
-  int c;
-  while ((c = fgetc(fp)) != EOF)
-    frequency[c]++;
+  int c, file_position = 0;
+  while ((c = fgetc(fp)) != EOF) {
+    if (c != '\n') {
+      frequency[c]++;
+      file_position++;
+    }
+  }
 
   fclose(fp);
+
+  printf("File position = %d\n", file_position);
+  for (int i = 0; i < 256; i++) {
+    if (frequency[i] > 0) {
+      printf("%c:%d|", i, frequency[i]);
+    }
+  }
+
+  printf("\n");
 }
 
-// Adds a node to the Linked List based on its frequency
+// Inserts a node to the LinkedList based on its frequency
 void insert_node(LinkedList *list, HuffNode *node) {
   if (list->head == NULL) {
     list->head = node;
     return;
   }
 
-  // Check if inserted node->freq is < head->freq
+  // First node of the list must have the lowest frequency
   if (node->frequency < list->head->frequency) {
     node->next = list->head;
     list->head = node;
     return;
   }
 
+  // Finds the correct position
   HuffNode *curr = list->head;
   while (curr->next != NULL && curr->next->frequency <= node->frequency) {
     curr = curr->next;
@@ -140,6 +225,42 @@ void insert_node(LinkedList *list, HuffNode *node) {
   // Insert node
   node->next = curr->next;
   curr->next = node;
+}
+
+// Remove the head from a LinkedList
+HuffNode *remove_node(LinkedList *list) {
+  if (list->head == NULL)
+    return NULL;
+
+  HuffNode *tmp = list->head;
+  list->head = tmp->next;
+  tmp->next = NULL;
+
+  return tmp;
+}
+
+// Creates a new node (parent) with the summed frequency of the first two
+void sum_frequency(LinkedList *list) {
+  // The first and second will also be used as the left and right of the parent.
+  HuffNode *left = remove_node(list);
+  HuffNode *right = remove_node(list);
+
+  // Parent left -> lower frequency | right -> highest frequency
+  HuffNode *parent = create_node('\0', left->frequency + right->frequency);
+  parent->left = left;
+  parent->right = right;
+
+  insert_node(list, parent);
+  print_list(list->head);
+}
+
+void insert_parent_tree(LinkedList *list) {
+  while (list->head != NULL && list->head->next != NULL) {
+    sum_frequency(list);
+  }
+
+  printf("\n\nlist: must have 1 node (which will be used as root)\n");
+  print_list(list->head);
 }
 
 int main(void) {
@@ -158,6 +279,10 @@ int main(void) {
   }
 
   print_list(list->head);
+
+  insert_parent_tree(list);
+  print_levels(list->head);
+
   free_list(list->head);
 
   return 0;
