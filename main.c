@@ -29,15 +29,6 @@ HuffNode *create_node(char ch, int freq) {
   return newNode;
 }
 
-// Frees the memory allocated for a Binary Tree
-void free_tree(HuffNode *root) {
-  if (root != NULL) {
-    free_tree(root->left);
-    free_tree(root->right);
-    free(root);
-  }
-}
-
 // Frees the memory allocated for a Linked List
 void free_list(HuffNode *head) {
   HuffNode *curr = NULL;
@@ -55,6 +46,24 @@ void print_list(HuffNode *head) {
     printf("char: %c\t\tfreq: %d\n", curr->data, curr->frequency);
     curr = curr->next;
   }
+}
+
+// Returns the size of a Linked List
+int list_size(HuffNode *head) {
+  int count = 0;
+
+  HuffNode *curr = head;
+  while (curr != NULL) {
+    count++;
+    curr = curr->next;
+  }
+
+  return count;
+}
+
+// Checks if a node is a leaf
+bool is_leaf(HuffNode *node) {
+  return (node->left == NULL && node->right == NULL);
 }
 
 void print_levels(HuffNode *root) {
@@ -159,7 +168,7 @@ void char_frequency(int *frequency) {
   printf("\n");
 }
 
-// Inserts a node to the LinkedList based on its frequency
+// Inserts a node to the Linked List based on its frequency
 void insert_node(LinkedList *list, HuffNode *node) {
   if (list->head == NULL) {
     list->head = node;
@@ -184,7 +193,7 @@ void insert_node(LinkedList *list, HuffNode *node) {
   curr->next = node;
 }
 
-// Remove the head from a LinkedList
+// Remove the head from a Linked List
 HuffNode *remove_node(LinkedList *list) {
   if (list->head == NULL)
     return NULL;
@@ -211,13 +220,37 @@ void sum_frequency(LinkedList *list) {
   print_list(list->head);
 }
 
-// Builds a Huffman Tree
+// Builds a Huffman Tree from the Linked List
 void build_huffman_tree(LinkedList *list) {
   while (list->head != NULL && list->head->next != NULL) {
     sum_frequency(list);
   }
   /* printf("\n\nlist: must have 1 node (which will be used as root)\n"); */
   /* print_list(list->head); */
+}
+
+// Traverse a tree assigning 0s for left path and 1s for right
+void encode_tree(HuffNode *root, char bitstream[], int pos) {
+  if (root == NULL)
+    return;
+
+  // Prints path from a leaf (char node)
+  if (is_leaf(root)) {
+    /* printf("char %c: ", root->data); */
+    for (int i = 0; i < pos; i++) {
+      printf("%c", bitstream[i]);
+    }
+    /* printf("\n"); */
+    return;
+  }
+
+  // Assign '0' for left path
+  bitstream[pos] = '0';
+  encode_tree(root->left, bitstream, pos + 1);
+
+  // Assign '1' for right path
+  bitstream[pos] = '1';
+  encode_tree(root->right, bitstream, pos + 1);
 }
 
 int main(void) {
@@ -237,8 +270,11 @@ int main(void) {
 
   print_list(list->head);
 
+  char bitstream[list_size(list->head)];
+
   build_huffman_tree(list);
-  print_levels(list->head);
+  encode_tree(list->head, bitstream, 0);
+  printf("\n");
 
   free_list(list->head);
 
