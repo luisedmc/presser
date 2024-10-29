@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+int total_bits = 0;
+
 // HuffNode is a BTreeNode & LinkedListNode
 typedef struct HuffNode_ {
   char data;
@@ -117,6 +119,11 @@ void print_levels(HuffNode *root) {
   free(queue);
 }
 
+void print_binary(char ch) {
+  for (int i = 7; i >= 0; i--)
+    printf("%d", (ch >> i) & 1);
+}
+
 FILE *file_handler() {
   // Opens a file called "text.txt"
   FILE *fp = fopen("text.txt", "r");
@@ -159,13 +166,6 @@ void char_frequency(int *frequency) {
   fclose(fp);
 
   printf("File position = %d\n", file_position);
-  for (int i = 0; i < 256; i++) {
-    if (frequency[i] > 0) {
-      printf("%c:%d|", i, frequency[i]);
-    }
-  }
-
-  printf("\n");
 }
 
 // Inserts a node to the Linked List based on its frequency
@@ -217,10 +217,9 @@ void sum_frequency(LinkedList *list) {
   parent->right = right;
 
   insert_node(list, parent);
-  print_list(list->head);
 }
 
-// Builds a Huffman Tree from the Linked List
+/* Builds a Huffman Tree from the Linked List */
 void build_huffman_tree(LinkedList *list) {
   while (list->head != NULL && list->head->next != NULL) {
     sum_frequency(list);
@@ -229,26 +228,29 @@ void build_huffman_tree(LinkedList *list) {
   /* print_list(list->head); */
 }
 
-// Traverse a tree assigning 0s for left path and 1s for right
+/* Traverse a tree assigning 0s & 1s for left and right path respectivelly */
 void encode_tree(HuffNode *root, char bitstream[], int pos) {
   if (root == NULL)
     return;
 
-  // Prints path from a leaf (char node)
-  if (is_leaf(root)) {
-    /* printf("char %c: ", root->data); */
+  /* Prints path from a char node (leaf) */
+  if (root->left == NULL && root->right == NULL) {
+    printf("char %c: ", root->data);
     for (int i = 0; i < pos; i++) {
       printf("%c", bitstream[i]);
     }
-    /* printf("\n"); */
+
+    /* Add to total bits: path length * frequency of this character */
+    total_bits += (pos * root->frequency);
+    printf(" - frequency: %d, bits: %d\n", root->frequency, pos);
     return;
   }
 
-  // Assign '0' for left path
+  /* Assign '0' for left path */
   bitstream[pos] = '0';
   encode_tree(root->left, bitstream, pos + 1);
 
-  // Assign '1' for right path
+  /* Assign '1' for right path */
   bitstream[pos] = '1';
   encode_tree(root->right, bitstream, pos + 1);
 }
@@ -268,13 +270,15 @@ int main(void) {
     }
   }
 
-  print_list(list->head);
+  /* print_list(list->head); */
 
   char bitstream[list_size(list->head)];
 
   build_huffman_tree(list);
   encode_tree(list->head, bitstream, 0);
-  printf("\n");
+
+  printf("\ncompressed: %d\n", total_bits);
+  printf("uncompressed(8 bits): %d\n", list->head->frequency * 8);
 
   free_list(list->head);
 
