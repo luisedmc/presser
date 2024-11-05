@@ -106,6 +106,27 @@ FILE *file_handler() {
   return fp;
 }
 
+/* Writes a single bit into a file */
+void write_bit(CompressedFile *cf, int bit) {
+  if (cf == NULL)
+    return;
+
+  /* Shift buffer left by 1 */
+  cf->bit_buffer = cf->bit_buffer << 1;
+
+  if (bit == 1)
+    cf->bit_buffer |= 1;
+
+  cf->bit_count++;
+
+  /* If buffer is full (8 bites) */
+  if (cf->bit_count == 8) {
+    fputc(cf->bit_buffer, cf->output);
+    cf->bit_buffer = 0;
+    cf->bit_count = 0;
+  }
+}
+
 // Sets the frequency for each char in the file
 void char_frequency(int *frequency) {
   FILE *fp = file_handler();
