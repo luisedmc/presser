@@ -20,6 +20,12 @@ typedef struct LinkedList_ {
   HuffNode *head;
 } LinkedList;
 
+typedef struct CompressedFile_ {
+  unsigned char bit_buffer; // 8 bits
+  int bit_count;            // how many bits in the buffer, when reaches 8 write
+  FILE *output;             // compressed file
+} CompressedFile;
+
 // Creates a new node
 HuffNode *create_node(char ch, int freq) {
   HuffNode *newNode = (HuffNode *)malloc(sizeof(HuffNode));
@@ -75,7 +81,7 @@ void print_binary(char ch) {
 
 FILE *file_handler() {
   // Opens a file called "text.txt"
-  FILE *fp = fopen("text.txt", "r");
+  FILE *fp = fopen("uncompressed.txt", "r");
   if (fp == NULL) {
     fputs("ERROR: Cannot open text.txt file.\n", stderr);
     return NULL;
@@ -173,35 +179,37 @@ void build_huffman_tree(LinkedList *list) {
   while (list->head != NULL && list->head->next != NULL) {
     sum_frequency(list);
   }
-  /* printf("\n\nlist: must have 1 node (which will be used as root)\n"); */
-  /* print_list(list->head); */
 }
 
 /* Traverse a tree assigning 0s & 1s for left and right path respectively */
-void encode_tree(HuffNode *root, char bitstream[], int pos) {
+void encode_tree(HuffNode *root, char bitstream[], int pos, int code_length[],
+                 unsigned int codes[]) {
   if (root == NULL)
     return;
 
-  /* Prints path from a char node (leaf) */
-  if (root->left == NULL && root->right == NULL) {
-    printf("char %c: ", root->data);
+  if (is_leaf(root)) {
+    code_length[root->data] = pos;
+
+    /* Convert bitstream into a number and store it in codes */
+    unsigned int curr_code = 0;
     for (int i = 0; i < pos; i++) {
-      printf("%c", bitstream[i]);
+      curr_code = curr_code << 1;
+      if (bitstream[i] == '1')
+        curr_code |= 1;
     }
+    codes[root->data] = curr_code;
 
     /* Add to total bits: path length * frequency of this character */
     total_bits += (pos * root->frequency);
-    printf(" - frequency: %d, bits: %d\n", root->frequency, pos);
-    return;
   }
 
   /* Assign '0' for left path */
   bitstream[pos] = '0';
-  encode_tree(root->left, bitstream, pos + 1);
+  encode_tree(root->left, bitstream, pos + 1, code_length, codes);
 
   /* Assign '1' for right path */
   bitstream[pos] = '1';
-  encode_tree(root->right, bitstream, pos + 1);
+  encode_tree(root->right, bitstream, pos + 1, code_length, codes);
 }
 
 int main(void) {
@@ -209,6 +217,8 @@ int main(void) {
   list->head = NULL;
 
   int frequency[256] = {0};
+  int code_length[256] = {0};
+  unsigned int codes[256] = {0};
 
   char_frequency(frequency);
 
@@ -224,7 +234,7 @@ int main(void) {
   char bitstream[list_size(list->head)];
 
   build_huffman_tree(list);
-  encode_tree(list->head, bitstream, 0);
+  encode_tree(list->head, bitstream, 0, code_length, codes);
 
   printf("\ncompressed: %d\n", total_bits);
   printf("uncompressed(8 bits): %d\n", list->head->frequency * 8);
