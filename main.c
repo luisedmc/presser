@@ -68,57 +68,6 @@ bool is_leaf(HuffNode *node) {
   return (node->left == NULL && node->right == NULL);
 }
 
-void print_levels(HuffNode *root) {
-  if (root == NULL) {
-    printf("Tree is empty\n");
-    return;
-  }
-
-  // Create a queue to store nodes
-  HuffNode **queue =
-      (HuffNode **)malloc(1000 * sizeof(HuffNode *)); // Adjust size as needed
-  int front = 0;
-  int rear = 0;
-
-  // Enqueue root
-  queue[rear++] = root;
-
-  // Keep track of current level
-  int level = 0;
-  printf("\n--- Level %d ---\n", level);
-
-  while (front < rear) {
-    // Calculate nodes in current level
-    int level_size = rear - front;
-
-    // Process all nodes of current level
-    for (int i = 0; i < level_size; i++) {
-      // Dequeue node and print it
-      HuffNode *current = queue[front++];
-      printf("Char: %c\tFreq: %d\t", current->data, current->frequency);
-
-      // Enqueue left child
-      if (current->left != NULL) {
-        queue[rear++] = current->left;
-      }
-
-      // Enqueue right child
-      if (current->right != NULL) {
-        queue[rear++] = current->right;
-      }
-    }
-
-    // Print new line after each level
-    printf("\n");
-    level++;
-    if (front < rear) { // If there are more levels
-      printf("\n--- Level %d ---\n", level);
-    }
-  }
-
-  free(queue);
-}
-
 void print_binary(char ch) {
   for (int i = 7; i >= 0; i--)
     printf("%d", (ch >> i) & 1);
@@ -228,7 +177,7 @@ void build_huffman_tree(LinkedList *list) {
   /* print_list(list->head); */
 }
 
-/* Traverse a tree assigning 0s & 1s for left and right path respectivelly */
+/* Traverse a tree assigning 0s & 1s for left and right path respectively */
 void encode_tree(HuffNode *root, char bitstream[], int pos) {
   if (root == NULL)
     return;
