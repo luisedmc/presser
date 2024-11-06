@@ -127,10 +127,18 @@ void write_bit(CompressedFile *cf, int bit) {
   }
 }
 
-// Sets the frequency for each char in the file
-void char_frequency(int *frequency) {
-  FILE *fp = file_handler();
+/* Clean remaining bits  */
+void flush_bits(CompressedFile *cf) {
+  if (cf->bit_count > 0) {
+    /* Left-shift remaining bits to proper position */
+    cf->bit_buffer <<= (8 - cf->bit_count);
+    /* Write final byte */
+    fputc(cf->bit_buffer, cf->output);
+  }
+}
 
+// Sets the frequency for each char in the file
+void char_frequency(FILE *fp, int *frequency) {
   int c, file_position = 0;
   while ((c = fgetc(fp)) != EOF) {
     if (c != '\n') {
@@ -138,8 +146,6 @@ void char_frequency(int *frequency) {
       file_position++;
     }
   }
-
-  fclose(fp);
 
   printf("File position = %d\n", file_position);
 }
@@ -234,15 +240,28 @@ void encode_tree(HuffNode *root, char bitstream[], int pos, int code_length[],
 }
 
 int main(void) {
+  /* Initialize */
+  FILE *fp_input = file_handler();
+  FILE *fp_output = fopen("compressed.bin", "wb");
+  if (fp_output == NULL)
+    return 1;
+  CompressedFile *cf = (CompressedFile *)malloc(sizeof(CompressedFile));
+  if (cf == NULL)
+    return 1;
+  cf->bit_buffer = 0;
+  cf->bit_count = 0;
+  cf->output = fp_output;
+
+  /* Create frequency table */
   LinkedList *list = (LinkedList *)malloc(sizeof(LinkedList));
   list->head = NULL;
-
   int frequency[256] = {0};
   int code_length[256] = {0};
   unsigned int codes[256] = {0};
 
-  char_frequency(frequency);
+  char_frequency(fp_input, frequency);
 
+  /* Create nodes and build tree */
   for (int i = 0; i < 256; i++) {
     if (frequency[i] > 0) {
       HuffNode *newNode = create_node(i, frequency[i]);
@@ -250,17 +269,35 @@ int main(void) {
     }
   }
 
-  /* print_list(list->head); */
-
+  /* Build tree and generate codes */
   char bitstream[list_size(list->head)];
-
   build_huffman_tree(list);
   encode_tree(list->head, bitstream, 0, code_length, codes);
 
+  /* Compressing */
+  rewind(fp_input);
+  int c;
+  while ((c = fgetc(fp_input)) != EOF) {
+    if (c != '\n') {
+      unsigned int code = codes[c];
+      int length = code_length[c];
+      unsigned int mask = 1 << (length - 1);
+      for (int i = 0; i < length; i++) {
+        int bit = (code & mask) ? 1 : 0;
+        write_bit(cf, bit);
+        mask >>= 1;
+      }
+    }
+  }
+  flush_bits(cf);
+
+  /* Print statistics and cleanup */
   printf("\ncompressed: %d\n", total_bits);
   printf("uncompressed(8 bits): %d\n", list->head->frequency * 8);
 
   free_list(list->head);
-
+  free(cf);
+  fclose(fp_input);
+  fclose(fp_output);
   return 0;
 }
