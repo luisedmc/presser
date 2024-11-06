@@ -81,7 +81,7 @@ void print_binary(char ch) {
 
 FILE *file_handler() {
   // Opens a file called "text.txt"
-  FILE *fp = fopen("uncompressed.txt", "r");
+  FILE *fp = fopen("text.txt", "r");
   if (fp == NULL) {
     fputs("ERROR: Cannot open text.txt file.\n", stderr);
     return NULL;
@@ -106,7 +106,7 @@ FILE *file_handler() {
   return fp;
 }
 
-/* Writes a single bit into a file */
+/* Writes a single bit to output file, buffering until 8 bits is formed */
 void write_bit(CompressedFile *cf, int bit) {
   if (cf == NULL)
     return;
