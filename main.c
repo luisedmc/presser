@@ -119,7 +119,7 @@ void write_bit(CompressedFile *cf, int bit) {
 
   cf->bit_count++;
 
-  /* If buffer is full (8 bites) */
+  /* If buffer is full (8 bytes) */
   if (cf->bit_count == 8) {
     fputc(cf->bit_buffer, cf->output);
     cf->bit_buffer = 0;
