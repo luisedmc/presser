@@ -26,6 +26,22 @@ typedef struct CompressedFile_ {
   FILE *output;             // compressed file
 } CompressedFile;
 
+long getFileSize(const char *filename) {
+  FILE *file = fopen(filename, "rb"); // Open in binary mode
+  if (file == NULL) {
+    return -1; // Return -1 on error
+  }
+
+  // Seek to end of file
+  fseek(file, 0, SEEK_END);
+
+  // Get current position (this is the file size)
+  long size = ftell(file);
+
+  fclose(file);
+  return size;
+}
+
 // Creates a new node
 HuffNode *create_node(char ch, int freq) {
   HuffNode *newNode = (HuffNode *)malloc(sizeof(HuffNode));
@@ -106,7 +122,8 @@ FILE *file_handler() {
   return fp;
 }
 
-/* Writes a single bit to output file, buffering until 8 bits is formed */
+/* Writes individual bits to output file, buffering until 8 bits (files can only
+ * be written 1 byte at a time) */
 void write_bit(CompressedFile *cf, int bit) {
   if (cf == NULL)
     return;
@@ -114,12 +131,13 @@ void write_bit(CompressedFile *cf, int bit) {
   /* Shift buffer left by 1 */
   cf->bit_buffer = cf->bit_buffer << 1;
 
+  /* Add new bit if it's 1 */
   if (bit == 1)
     cf->bit_buffer |= 1;
 
   cf->bit_count++;
 
-  /* If buffer is full (8 bytes) */
+  /* Buffer full (8 bits) */
   if (cf->bit_count == 8) {
     fputc(cf->bit_buffer, cf->output);
     cf->bit_buffer = 0;
@@ -127,7 +145,7 @@ void write_bit(CompressedFile *cf, int bit) {
   }
 }
 
-/* Clean remaining bits  */
+/* Handles remaining bits in buffer that don't form a complete byte */
 void flush_bits(CompressedFile *cf) {
   if (cf->bit_count > 0) {
     /* Left-shift remaining bits to proper position */
@@ -242,7 +260,7 @@ void encode_tree(HuffNode *root, char bitstream[], int pos, int code_length[],
 int main(void) {
   /* Initialize */
   FILE *fp_input = file_handler();
-  FILE *fp_output = fopen("compressed.bin", "wb");
+  FILE *fp_output = fopen("compressed.txt", "wb");
   if (fp_output == NULL)
     return 1;
   CompressedFile *cf = (CompressedFile *)malloc(sizeof(CompressedFile));
@@ -294,6 +312,14 @@ int main(void) {
   /* Print statistics and cleanup */
   printf("\ncompressed: %d\n", total_bits);
   printf("uncompressed(8 bits): %d\n", list->head->frequency * 8);
+
+  long int com, unc;
+
+  com = getFileSize("text.txt");
+  unc = getFileSize("compressed.txt");
+
+  printf("\ncompressed size: %lu\n", unc);
+  printf("uncompressed size: %lu\n", com);
 
   free_list(list->head);
   free(cf);
