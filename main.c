@@ -3,16 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MAX_CHARS 256
+
 int total_bits = 0;
 
 // HuffNode is a BTreeNode & LinkedListNode
 typedef struct HuffNode_ {
   char data;
-  int frequency;
+  unsigned frequency;
 
-  struct HuffNode_ *left;
-  struct HuffNode_ *right;
-
+  struct HuffNode_ *left, *right;
   struct HuffNode_ *next;
 } HuffNode;
 
@@ -26,19 +26,20 @@ typedef struct CompressedFile_ {
   FILE *output;             // compressed file
 } CompressedFile;
 
+/* Checks for the existence of a file */
+bool check_file(FILE *fp) { return fp != NULL; }
+
 long getFileSize(const char *filename) {
-  FILE *file = fopen(filename, "rb"); // Open in binary mode
-  if (file == NULL) {
-    return -1; // Return -1 on error
-  }
+  FILE *fp = fopen(filename, "rb"); // Open in binary mode
+  check_file(fp);
 
   // Seek to end of file
-  fseek(file, 0, SEEK_END);
+  fseek(fp, 0, SEEK_END);
 
   // Get current position (this is the file size)
-  long size = ftell(file);
+  long size = ftell(fp);
 
-  fclose(file);
+  fclose(fp);
   return size;
 }
 
@@ -47,9 +48,7 @@ HuffNode *create_node(char ch, int freq) {
   HuffNode *newNode = (HuffNode *)malloc(sizeof(HuffNode));
   newNode->data = ch;
   newNode->frequency = freq;
-  newNode->left = NULL;
-  newNode->right = NULL;
-  newNode->next = NULL;
+  newNode->left = newNode->right = newNode->next = NULL;
   return newNode;
 }
 
@@ -60,15 +59,6 @@ void free_list(HuffNode *head) {
     curr = head;
     head = head->next;
     free(curr);
-  }
-}
-
-// Prints a Linked List
-void print_list(HuffNode *head) {
-  HuffNode *curr = head;
-  while (curr != NULL) {
-    printf("char: %c\t\tfreq: %d\n", curr->data, curr->frequency);
-    curr = curr->next;
   }
 }
 
@@ -88,11 +78,6 @@ int list_size(HuffNode *head) {
 // Checks if a node is a leaf
 bool is_leaf(HuffNode *node) {
   return (node->left == NULL && node->right == NULL);
-}
-
-void print_binary(char ch) {
-  for (int i = 7; i >= 0; i--)
-    printf("%d", (ch >> i) & 1);
 }
 
 FILE *file_handler() {
@@ -118,7 +103,6 @@ FILE *file_handler() {
   /* printf("file position = %ld\n", fpi); // bytes */
 
   rewind(fp);
-
   return fp;
 }
 
@@ -261,8 +245,7 @@ int main(void) {
   /* Initialize */
   FILE *fp_input = file_handler();
   FILE *fp_output = fopen("compressed.txt", "wb");
-  if (fp_output == NULL)
-    return 1;
+  check_file(fp_output);
   CompressedFile *cf = (CompressedFile *)malloc(sizeof(CompressedFile));
   if (cf == NULL)
     return 1;
@@ -273,14 +256,14 @@ int main(void) {
   /* Create frequency table */
   LinkedList *list = (LinkedList *)malloc(sizeof(LinkedList));
   list->head = NULL;
-  int frequency[256] = {0};
+  int frequency[MAX_CHARS] = {0};
   int code_length[256] = {0};
   unsigned int codes[256] = {0};
 
   char_frequency(fp_input, frequency);
 
   /* Create nodes and build tree */
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < MAX_CHARS; i++) {
     if (frequency[i] > 0) {
       HuffNode *newNode = create_node(i, frequency[i]);
       insert_node(list, newNode);
