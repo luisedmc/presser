@@ -1,141 +1,101 @@
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define MAX_CHARS 256
 
-int total_bits = 0;
+static unsigned total_bits = 0;
+static unsigned bit_count = 0;
+static unsigned char bit_buffer = 0;
 
-// HuffNode is a BTreeNode & LinkedListNode
-typedef struct HuffNode_ {
+/* HuffNode stores a node for a BinaryTree & LinkedList */
+typedef struct HuffNode {
   char data;
   unsigned frequency;
-
-  struct HuffNode_ *left, *right;
-  struct HuffNode_ *next;
+  struct HuffNode *left, *right, *next;
 } HuffNode;
 
-typedef struct LinkedList_ {
+/* LinkedList stores the base structure for a LinkedList */
+typedef struct LinkedList {
+  unsigned size;
   HuffNode *head;
 } LinkedList;
 
-typedef struct CompressedFile_ {
-  unsigned char bit_buffer; // 8 bits
-  int bit_count;            // how many bits in the buffer, when reaches 8 write
-  FILE *output;             // compressed file
-} CompressedFile;
-
-/* Checks for the existence of a file */
-bool check_file(FILE *fp) { return fp != NULL; }
-
-long getFileSize(const char *filename) {
-  FILE *fp = fopen(filename, "rb"); // Open in binary mode
-  check_file(fp);
-
-  // Seek to end of file
-  fseek(fp, 0, SEEK_END);
-
-  // Get current position (this is the file size)
-  long size = ftell(fp);
-
-  fclose(fp);
-  return size;
-}
-
-// Creates a new node
-HuffNode *create_node(char ch, int freq) {
+/* Creates a new HuffNode  */
+HuffNode *create_node(char data, unsigned freq) {
   HuffNode *newNode = (HuffNode *)malloc(sizeof(HuffNode));
-  newNode->data = ch;
+  newNode->data = data;
   newNode->frequency = freq;
   newNode->left = newNode->right = newNode->next = NULL;
   return newNode;
 }
 
-// Frees the memory allocated for a Linked List
+/* Inserts a new node in the LinkedList based on its frequency */
+void insert_node(LinkedList *list, HuffNode *node) {
+  if (list->head == NULL) {
+    list->head = node;
+    node->next = NULL;
+    list->size++;
+    return;
+  }
+
+  /* Frequency less than head */
+  if (node->frequency < list->head->frequency) {
+    node->next = list->head;
+    list->head = node;
+    list->size++;
+    return;
+  }
+
+  /* Finds the correct position to insert */
+  HuffNode *curr = list->head;
+  while (curr->next != NULL && curr->next->frequency <= node->frequency)
+    curr = curr->next;
+
+  /* Insert node at the correct position */
+  node->next = curr->next;
+  curr->next = node;
+  list->size++;
+}
+
+/* Removes the head from a LinkedList */
+HuffNode *remove_head(LinkedList *list) {
+  if (list->head == NULL)
+    return NULL;
+  HuffNode *tmp = list->head;
+  list->head = tmp->next;
+  tmp->next = NULL;
+  return tmp;
+}
+
+/* Checks if a HuffNode is a leaf */
+int is_leaf(HuffNode *node) {
+  return (node->left == NULL && node->right == NULL);
+}
+
+/* Creates an empty LinkedList */
+LinkedList *create_linkedlist() {
+  LinkedList *list = (LinkedList *)malloc(sizeof(LinkedList));
+  list->size = 0;
+  list->head = NULL;
+  return list;
+}
+
+/* Frees the memory allocated for a LinkedList */
 void free_list(HuffNode *head) {
-  HuffNode *curr = NULL;
   while (head != NULL) {
-    curr = head;
+    HuffNode *curr = head;
     head = head->next;
     free(curr);
   }
 }
 
-// Returns the size of a Linked List
-int list_size(HuffNode *head) {
-  int count = 0;
-
-  HuffNode *curr = head;
+/* Prints a LinkedList */
+void print_list(LinkedList *list) {
+  HuffNode *curr = list->head;
   while (curr != NULL) {
-    count++;
+    printf("node: %c | freq: %d\n", curr->data, curr->frequency);
     curr = curr->next;
-  }
-
-  return count;
-}
-
-// Checks if a node is a leaf
-bool is_leaf(HuffNode *node) {
-  return (node->left == NULL && node->right == NULL);
-}
-
-FILE *file_handler() {
-  // Opens a file called "text.txt"
-  FILE *fp = fopen("text.txt", "r");
-  if (fp == NULL) {
-    fputs("ERROR: Cannot open text.txt file.\n", stderr);
-    return NULL;
-  }
-  // Calls fseek to set the file position indicator to the EOF
-  if (fseek(fp, 0, SEEK_END) != 0) {
-    fputs("ERROR: Seek to end of file failed.\n", stderr);
-    return NULL;
-  }
-
-  /* Function ftell returns the current value of the file position indicator for
-   * the stream */
-  long fpi = ftell(fp);
-  if (fpi == -1L) { // ftell failed
-    perror("Tell");
-    return NULL;
-  }
-  /* printf("file position = %ld\n", fpi); // bytes */
-
-  rewind(fp);
-  return fp;
-}
-
-/* Writes individual bits to output file, buffering until 8 bits (files can only
- * be written 1 byte at a time) */
-void write_bit(CompressedFile *cf, int bit) {
-  if (cf == NULL)
-    return;
-
-  /* Shift buffer left by 1 */
-  cf->bit_buffer = cf->bit_buffer << 1;
-
-  /* Add new bit if it's 1 */
-  if (bit == 1)
-    cf->bit_buffer |= 1;
-
-  cf->bit_count++;
-
-  /* Buffer full (8 bits) */
-  if (cf->bit_count == 8) {
-    fputc(cf->bit_buffer, cf->output);
-    cf->bit_buffer = 0;
-    cf->bit_count = 0;
-  }
-}
-
-/* Handles remaining bits in buffer that don't form a complete byte */
-void flush_bits(CompressedFile *cf) {
-  if (cf->bit_count > 0) {
-    /* Left-shift remaining bits to proper position */
-    cf->bit_buffer <<= (8 - cf->bit_count);
-    /* Write final byte */
-    fputc(cf->bit_buffer, cf->output);
   }
 }
 
@@ -148,165 +108,157 @@ void char_frequency(FILE *fp, int *frequency) {
       file_position++;
     }
   }
-
   printf("File position = %d\n", file_position);
 }
 
-// Inserts a node to the Linked List based on its frequency
-void insert_node(LinkedList *list, HuffNode *node) {
-  if (list->head == NULL) {
-    list->head = node;
-    return;
-  }
-
-  // First node of the list must have the lowest frequency
-  if (node->frequency < list->head->frequency) {
-    node->next = list->head;
-    list->head = node;
-    return;
-  }
-
-  // Finds the correct position
-  HuffNode *curr = list->head;
-  while (curr->next != NULL && curr->next->frequency <= node->frequency) {
-    curr = curr->next;
-  }
-
-  // Insert node
-  node->next = curr->next;
-  curr->next = node;
-}
-
-// Remove the head from a Linked List
-HuffNode *remove_node(LinkedList *list) {
-  if (list->head == NULL)
+/* Creates a frequency list from the input file */
+LinkedList *frequency_list(FILE *input_file) {
+  LinkedList *list = (LinkedList *)malloc(sizeof(LinkedList));
+  if (list == NULL)
     return NULL;
+  list->head = NULL;
 
-  HuffNode *tmp = list->head;
-  list->head = tmp->next;
-  tmp->next = NULL;
+  int frequency[MAX_CHARS] = {0};
+  char_frequency(input_file, frequency);
 
-  return tmp;
+  for (int i = 0; i < MAX_CHARS; i++) {
+    if (frequency[i] > 0) {
+      HuffNode *new_node = create_node(i, frequency[i]);
+      if (new_node == NULL) {
+        free_list(list->head);
+        free(list);
+        return NULL;
+      }
+      insert_node(list, new_node);
+    }
+  }
+
+  return list;
 }
 
-// Creates a new node (parent) with the summed frequency of the first two
-void sum_frequency(LinkedList *list) {
-  // The first and second will also be used as the left and right of the parent
-  HuffNode *left = remove_node(list);
-  HuffNode *right = remove_node(list);
-
-  // Parent left -> lower frequency | right -> highest frequency
-  HuffNode *parent = create_node('\0', left->frequency + right->frequency);
-  parent->left = left;
-  parent->right = right;
-
-  insert_node(list, parent);
-}
-
-/* Builds a Huffman Tree from the Linked List */
-void build_huffman_tree(LinkedList *list) {
+/* Builds a Huffman Tree using a Linked List */
+void huffman_tree(LinkedList *list) {
   while (list->head != NULL && list->head->next != NULL) {
-    sum_frequency(list);
+    /* Creates a new node (parent) with the summed frequency of the first two */
+    HuffNode *left = remove_head(list), *right = remove_head(list);
+    HuffNode *parent = create_node('\0', left->frequency + right->frequency);
+    parent->left = left, parent->right = right;
+
+    insert_node(list, parent);
   }
 }
 
 /* Traverse a tree assigning 0s & 1s for left and right path respectively */
 void encode_tree(HuffNode *root, char bitstream[], int pos, int code_length[],
-                 unsigned int codes[]) {
+                 unsigned codes[]) {
   if (root == NULL)
     return;
 
   if (is_leaf(root)) {
     code_length[root->data] = pos;
 
-    /* Convert bitstream into a number and store it in codes */
-    unsigned int curr_code = 0;
-    for (int i = 0; i < pos; i++) {
-      curr_code = curr_code << 1;
-      if (bitstream[i] == '1')
-        curr_code |= 1;
-    }
+    unsigned curr_code = 0;
+    for (int i = 0; i < pos; i++)
+      curr_code = (curr_code << 1) | (bitstream[i] == '1');
     codes[root->data] = curr_code;
-
-    /* Add to total bits: path length * frequency of this character */
     total_bits += (pos * root->frequency);
   }
 
-  /* Assign '0' for left path */
   bitstream[pos] = '0';
   encode_tree(root->left, bitstream, pos + 1, code_length, codes);
 
-  /* Assign '1' for right path */
   bitstream[pos] = '1';
   encode_tree(root->right, bitstream, pos + 1, code_length, codes);
 }
 
-int main(void) {
-  /* Initialize */
-  FILE *fp_input = file_handler();
-  FILE *fp_output = fopen("compressed.txt", "wb");
-  check_file(fp_output);
-  CompressedFile *cf = (CompressedFile *)malloc(sizeof(CompressedFile));
-  if (cf == NULL)
-    return 1;
-  cf->bit_buffer = 0;
-  cf->bit_count = 0;
-  cf->output = fp_output;
+/* Write a single bit to the output file */
+void write_bit(FILE *output, int bit) {
+  bit_buffer = (bit_buffer << 1) | (bit & 1);
+  bit_count++;
 
-  /* Create frequency table */
-  LinkedList *list = (LinkedList *)malloc(sizeof(LinkedList));
-  list->head = NULL;
-  int frequency[MAX_CHARS] = {0};
-  int code_length[256] = {0};
-  unsigned int codes[256] = {0};
-
-  char_frequency(fp_input, frequency);
-
-  /* Create nodes and build tree */
-  for (int i = 0; i < MAX_CHARS; i++) {
-    if (frequency[i] > 0) {
-      HuffNode *newNode = create_node(i, frequency[i]);
-      insert_node(list, newNode);
-    }
+  if (bit_count == 8) {
+    fputc(bit_buffer, output);
+    bit_buffer = 0;
+    bit_count = 0;
   }
+}
 
-  /* Build tree and generate codes */
-  char bitstream[list_size(list->head)];
-  build_huffman_tree(list);
-  encode_tree(list->head, bitstream, 0, code_length, codes);
+/* Write any remaining bits in the buffer */
+void clear_bits(FILE *output) {
+  if (bit_count > 0) {
+    bit_buffer <<= (8 - bit_count);
+    fputc(bit_buffer, output);
+    bit_buffer = 0;
+    bit_count = 0;
+  }
+}
 
-  /* Compressing */
-  rewind(fp_input);
+/* Compress the input file using the generated codes */
+void compress(FILE *input, FILE *output, const unsigned codes[],
+              const int code_length[]) {
+  rewind(input);
   int c;
-  while ((c = fgetc(fp_input)) != EOF) {
+
+  while ((c = fgetc(input)) != EOF) {
     if (c != '\n') {
-      unsigned int code = codes[c];
+      unsigned code = codes[c];
       int length = code_length[c];
-      unsigned int mask = 1 << (length - 1);
+      unsigned mask = 1 << (length - 1);
+
       for (int i = 0; i < length; i++) {
-        int bit = (code & mask) ? 1 : 0;
-        write_bit(cf, bit);
+        write_bit(output, (code & mask) ? 1 : 0);
         mask >>= 1;
       }
     }
   }
-  flush_bits(cf);
 
-  /* Print statistics and cleanup */
-  printf("\ncompressed: %d\n", total_bits);
-  printf("uncompressed(8 bits): %d\n", list->head->frequency * 8);
+  clear_bits(output);
+}
 
-  long int com, unc;
+long get_file_size(const char *filename) {
+  FILE *fp = fopen(filename, "rb");
+  if (fp == NULL)
+    return -1;
 
-  com = getFileSize("text.txt");
-  unc = getFileSize("compressed.txt");
+  fseek(fp, 0, SEEK_END);
+  long size = ftell(fp);
+  fclose(fp);
+  return size;
+}
 
-  printf("\ncompressed size: %lu\n", unc);
-  printf("uncompressed size: %lu\n", com);
+/* Prints the size of both compressed and uncompressed files */
+void print_statistics(LinkedList *list) {
+  long uncompressed = get_file_size("text.txt");
+  long compressed = get_file_size("compressed.txt");
 
+  printf("\nBits:\n");
+  printf("compressed: %d\n", total_bits);
+  printf("uncompressed: %d\n", list->head->frequency * 8);
+  printf("\nBytes:\n");
+  printf("compressed size: %ld\n", compressed);
+  printf("uncompressed size: %ld\n", uncompressed);
+}
+
+int main(void) {
+  FILE *input = fopen("text.txt", "r");
+  FILE *output = fopen("compressed.txt", "wb");
+
+  LinkedList *list = frequency_list(input);
+
+  int code_length[MAX_CHARS] = {0};
+  unsigned codes[MAX_CHARS] = {0};
+  char bitstream[MAX_CHARS];
+
+  huffman_tree(list);
+  encode_tree(list->head, bitstream, 0, code_length, codes);
+  compress(input, output, codes, code_length);
+  print_statistics(list);
+
+  // Cleanup
   free_list(list->head);
-  free(cf);
-  fclose(fp_input);
-  fclose(fp_output);
+  free(list);
+  fclose(input);
+  fclose(output);
+
   return 0;
 }
