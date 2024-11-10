@@ -21,6 +21,9 @@ typedef struct LinkedList {
   HuffNode *head;
 } LinkedList;
 
+void print_statistics(LinkedList *list, const char *input_filename,
+                      const char *output_filename);
+
 /* Creates a new HuffNode  */
 HuffNode *create_node(char data, unsigned freq) {
   HuffNode *newNode = (HuffNode *)malloc(sizeof(HuffNode));
@@ -194,11 +197,41 @@ void clear_bits(FILE *output) {
 }
 
 /* Compress the input file using the generated codes */
-void compress(FILE *input, FILE *output, const unsigned codes[],
-              const int code_length[]) {
+int compress(const char *input_filename, const char *output_filename) {
+  FILE *input = fopen(input_filename, "r");
+  if (input == NULL) {
+    printf("Error: Could not open input file %s\n", input_filename);
+    return -1;
+  }
+
+  FILE *output = fopen(output_filename, "wb");
+  if (output == NULL) {
+    printf("Error: Could not open output file %s\n", output_filename);
+    fclose(input);
+    return -1;
+  }
+
+  // Initialize the frequency list
+  LinkedList *list = frequency_list(input);
+  if (list == NULL) {
+    printf("Error: Could not create frequency list\n");
+    fclose(input);
+    fclose(output);
+    return -1;
+  }
+
+  // Initialize arrays for encoding
+  int code_length[MAX_CHARS] = {0};
+  unsigned codes[MAX_CHARS] = {0};
+  char bitstream[MAX_CHARS];
+
+  // Build Huffman tree and encode
+  huffman_tree(list);
+  encode_tree(list->head, bitstream, 0, code_length, codes);
+
+  // Write compressed data
   rewind(input);
   int c;
-
   while ((c = fgetc(input)) != EOF) {
     if (c != '\n') {
       unsigned code = codes[c];
@@ -211,8 +244,22 @@ void compress(FILE *input, FILE *output, const unsigned codes[],
       }
     }
   }
-
   clear_bits(output);
+
+  print_statistics(list, input_filename, output_filename);
+
+  free_list(list->head);
+  free(list);
+  fclose(input);
+  fclose(output);
+
+  return 0;
+}
+
+/* Function to handle the decompression process */
+int decompress(const char *input_filename, const char *output_filename) {
+  printf("No decompression yet.\n");
+  return -1;
 }
 
 long get_file_size(const char *filename) {
@@ -227,38 +274,35 @@ long get_file_size(const char *filename) {
 }
 
 /* Prints the size of both compressed and uncompressed files */
-void print_statistics(LinkedList *list) {
-  long uncompressed = get_file_size("text.txt");
-  long compressed = get_file_size("compressed.txt");
+void print_statistics(LinkedList *list, const char *input_filename,
+                      const char *output_filename) {
+  long uncompressed = get_file_size(input_filename);
+  long compressed = get_file_size(output_filename);
 
   printf("\nBits:\n");
-  printf("compressed: %d\n", total_bits);
   printf("uncompressed: %d\n", list->head->frequency * 8);
+  printf("compressed: %d\n", total_bits);
   printf("\nBytes:\n");
-  printf("compressed size: %ld\n", compressed);
   printf("uncompressed size: %ld\n", uncompressed);
+  printf("compressed size: %ld\n", compressed);
 }
 
-int main(void) {
-  FILE *input = fopen("text.txt", "r");
-  FILE *output = fopen("compressed.txt", "wb");
+int main(int argc, char *argv[]) {
+  if (argc != 4) {
+    /* print_usage(argv[0]); */
+    return 1;
+  }
 
-  LinkedList *list = frequency_list(input);
+  const char *option = argv[1];
+  const char *input_file = argv[2];
+  const char *output_file = argv[3];
 
-  int code_length[MAX_CHARS] = {0};
-  unsigned codes[MAX_CHARS] = {0};
-  char bitstream[MAX_CHARS];
-
-  huffman_tree(list);
-  encode_tree(list->head, bitstream, 0, code_length, codes);
-  compress(input, output, codes, code_length);
-  print_statistics(list);
-
-  // Cleanup
-  free_list(list->head);
-  free(list);
-  fclose(input);
-  fclose(output);
-
-  return 0;
+  if (strcmp(option, "-c") == 0) {
+    return compress(input_file, output_file);
+  } else if (strcmp(option, "-d") == 0) {
+    return decompress(input_file, output_file);
+  } else {
+    /* print_usage(argv[0]); */
+    return 1;
+  }
 }
