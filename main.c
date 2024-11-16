@@ -273,6 +273,14 @@ long get_file_size(const char *filename) {
   return size;
 }
 
+void print_usage(const char *program) {
+  printf("Compile: gcc main.c -o %s\n", program);
+  printf("Usage: %s [option] [input_file] [output_file]\n", program);
+  printf("Options:\n");
+  printf("  -c    Compress the input file\n");
+  printf("  -d    Decompress the input file\n");
+}
+
 /* Prints the size of both compressed and uncompressed files */
 void print_statistics(LinkedList *list, const char *input_filename,
                       const char *output_filename) {
@@ -289,7 +297,7 @@ void print_statistics(LinkedList *list, const char *input_filename,
 
 int main(int argc, char *argv[]) {
   if (argc != 4) {
-    /* print_usage(argv[0]); */
+    print_usage(argv[0]);
     return 1;
   }
 
@@ -302,7 +310,7 @@ int main(int argc, char *argv[]) {
   } else if (strcmp(option, "-d") == 0) {
     return decompress(input_file, output_file);
   } else {
-    /* print_usage(argv[0]); */
+    print_usage(argv[0]);
     return 1;
   }
 }
