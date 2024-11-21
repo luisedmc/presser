@@ -196,6 +196,23 @@ void clear_bits(FILE *output) {
   }
 }
 
+/* Write the compression header with character frequencies */
+void write_header(FILE *output, LinkedList *list) {
+  /* Write number of distinct characters */
+  unsigned char num_chars = list->size;
+  fwrite(&num_chars, sizeof(unsigned char), 1, output);
+
+  /* Write each character and its frequency */
+  HuffNode *curr = list->head;
+  while (curr != NULL) {
+    if (is_leaf(curr)) {
+      fwrite(&curr->data, sizeof(char), 1, output);
+      fwrite(&curr->frequency, sizeof(unsigned), 1, output);
+    }
+    curr = curr->next;
+  }
+}
+
 /* Compress the input file using the generated codes */
 int compress(const char *input_filename, const char *output_filename) {
   FILE *input = fopen(input_filename, "r");
@@ -219,6 +236,8 @@ int compress(const char *input_filename, const char *output_filename) {
     fclose(output);
     return -1;
   }
+
+  write_header(output, list);
 
   // Initialize arrays for encoding
   int code_length[MAX_CHARS] = {0};
@@ -252,15 +271,11 @@ int compress(const char *input_filename, const char *output_filename) {
   free(list);
   fclose(input);
   fclose(output);
-
   return 0;
 }
 
 /* Function to handle the decompression process */
-int decompress(const char *input_filename, const char *output_filename) {
-  printf("No decompression yet.\n");
-  return -1;
-}
+int decompress(const char *input_filename, const char *output_filename) {}
 
 long get_file_size(const char *filename) {
   FILE *fp = fopen(filename, "rb");
