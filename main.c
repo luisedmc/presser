@@ -106,10 +106,8 @@ void print_list(LinkedList *list) {
 void char_frequency(FILE *fp, int *frequency) {
   int c, file_position = 0;
   while ((c = fgetc(fp)) != EOF) {
-    if (c != '\n') {
-      frequency[c]++;
-      file_position++;
-    }
+    frequency[c]++;
+    file_position++;
   }
   printf("File position = %d\n", file_position);
 }
@@ -186,6 +184,24 @@ void write_bit(FILE *output, int bit) {
   }
 }
 
+/* Read a single bit from a file */
+int read_bit(FILE *input, unsigned char *bit) {
+  static unsigned char buffer; // 1 byte
+  static int bits_remaining =
+      0; // Tracks how many bits left to process in the current buffer
+
+  if (bits_remaining == 0) {
+    if (fread(&buffer, 1, 1, input) != 1)
+      return 0;         // EOF or error
+    bits_remaining = 8; // 8 new bits to process
+  }
+
+  bits_remaining--;
+  *bit = (buffer >> bits_remaining) &
+         1; // AND with 1 to extract the least significant bit
+  return 1;
+}
+
 /* Write any remaining bits in the buffer */
 void clear_bits(FILE *output) {
   if (bit_count > 0) {
@@ -252,15 +268,13 @@ int compress(const char *input_filename, const char *output_filename) {
   rewind(input);
   int c;
   while ((c = fgetc(input)) != EOF) {
-    if (c != '\n') {
-      unsigned code = codes[c];
-      int length = code_length[c];
-      unsigned mask = 1 << (length - 1);
+    unsigned code = codes[c];
+    int length = code_length[c];
+    unsigned mask = 1 << (length - 1);
 
-      for (int i = 0; i < length; i++) {
-        write_bit(output, (code & mask) ? 1 : 0);
-        mask >>= 1;
-      }
+    for (int i = 0; i < length; i++) {
+      write_bit(output, (code & mask) ? 1 : 0);
+      mask >>= 1;
     }
   }
   clear_bits(output);
@@ -271,11 +285,65 @@ int compress(const char *input_filename, const char *output_filename) {
   free(list);
   fclose(input);
   fclose(output);
+
   return 0;
 }
 
-/* Function to handle the decompression process */
-int decompress(const char *input_filename, const char *output_filename) {}
+/* Function to handle the decompression */
+int decompress(const char *input_filename, const char *output_filename) {
+  FILE *input = fopen(input_filename, "rb");
+  FILE *output = fopen(output_filename, "w");
+  unsigned char num_chars;
+
+  if (fread(&num_chars, sizeof(unsigned char), 1, input) != 1) {
+    printf("ERROR: reading input file header.");
+    return -1;
+  }
+
+  LinkedList *list = create_linkedlist();
+
+  for (int i = 0; i < num_chars; i++) {
+    char character;
+    unsigned frequency;
+
+    if (fread(&character, sizeof(char), 1, input) != 1 ||
+        fread(&frequency, sizeof(unsigned), 1, input) != 1) {
+      printf("ERROR: reading char and frequency failed.");
+      free_list(list->head);
+      free(list);
+      fclose(input);
+      fclose(output);
+      return -1;
+    }
+
+    HuffNode *node = create_node(character, frequency);
+    insert_node(list, node);
+  }
+
+  huffman_tree(list);
+  HuffNode *root = list->head;
+  HuffNode *curr = root;
+
+  /* Read compressed data bit by bit */
+  unsigned char bit;
+  while (read_bit(input, &bit)) {
+    /* If bit equals 0, go left, if 1, go right */
+    curr = (bit == 0) ? curr->left : curr->right;
+
+    /* Reached a leaf node */
+    if (is_leaf(curr)) {
+      fputc(curr->data, output); // Write char to output
+      curr = root;               // Go back to root for next char
+    }
+  }
+
+  free_list(list->head);
+  free(list);
+  fclose(input);
+  fclose(output);
+
+  return 0;
+}
 
 long get_file_size(const char *filename) {
   FILE *fp = fopen(filename, "rb");
