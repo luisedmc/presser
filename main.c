@@ -3,26 +3,98 @@
 #include <string.h>
 
 #define MAX_CHARS 256
+#define LEFT(i) (2 * i + 1)
+#define RIGHT(i) (2 * i + 2)
+#define PARENT(i) ((i - 1) / 2)
 
 static unsigned total_bits = 0;
 static unsigned bit_count = 0;
 static unsigned char bit_buffer = 0;
 
-/* HuffNode stores a node for a BinaryTree & LinkedList */
+/* HuffNode stores a node for a BinaryTree & Heap */
 typedef struct HuffNode {
   char data;
   unsigned frequency;
   struct HuffNode *left, *right, *next;
 } HuffNode;
 
-/* LinkedList stores the base structure for a LinkedList */
-typedef struct LinkedList {
+typedef struct Heap {
+  HuffNode **array;
+  unsigned capacity;
   unsigned size;
-  HuffNode *head;
-} LinkedList;
+} Heap;
 
-void print_statistics(LinkedList *list, const char *input_filename,
+void print_statistics(Heap *heap, const char *input_filename,
                       const char *output_filename);
+
+void swap(HuffNode **a, HuffNode **b) {
+  HuffNode *tmp = *a;
+  *a = *b;
+  *b = tmp;
+}
+
+Heap *init_heap(unsigned capacity) {
+  Heap *heap = (Heap *)malloc(sizeof(Heap));
+  heap->array = (HuffNode **)malloc(capacity * sizeof(HuffNode *));
+  heap->capacity = capacity;
+  heap->size = 0;
+  return heap;
+}
+
+void min_heapify(Heap *heap, int i) {
+  int smallest = i;
+  int l = LEFT(i), r = RIGHT(i);
+
+  if (l < heap->size &&
+      heap->array[l]->frequency < heap->array[smallest]->frequency)
+    smallest = l;
+
+  if (r < heap->size &&
+      heap->array[r]->frequency < heap->array[smallest]->frequency)
+    smallest = r;
+
+  if (smallest != i) {
+    swap(&heap->array[i], &heap->array[smallest]);
+    min_heapify(heap, smallest);
+  }
+}
+
+HuffNode *extract_min(Heap *heap) {
+  if (heap->size == 0)
+    return NULL;
+
+  HuffNode *min = heap->array[0];
+  heap->array[0] = heap->array[heap->size - 1];
+  heap->size--;
+  min_heapify(heap, 0);
+
+  return min;
+}
+
+void insert_heap(Heap *heap, HuffNode *node) {
+  if (heap->size >= heap->capacity)
+    return;
+
+  /* Insert in the end */
+  heap->array[heap->size] = node;
+  int i = heap->size;
+  heap->size++;
+
+  /* Heapify up */
+  while (i > 0 &&
+         heap->array[PARENT(i)]->frequency > heap->array[i]->frequency) {
+    swap(&heap->array[PARENT(i)], &heap->array[i]);
+    i = PARENT(i);
+  }
+}
+
+void free_heap(Heap *heap) {
+  if (heap == NULL)
+    return;
+
+  free(heap->array);
+  free(heap);
+}
 
 /* Creates a new HuffNode  */
 HuffNode *create_node(char data, unsigned freq) {
@@ -33,73 +105,9 @@ HuffNode *create_node(char data, unsigned freq) {
   return newNode;
 }
 
-/* Inserts a new node in the LinkedList based on its frequency */
-void insert_node(LinkedList *list, HuffNode *node) {
-  if (list->head == NULL) {
-    list->head = node;
-    node->next = NULL;
-    list->size++;
-    return;
-  }
-
-  /* Frequency less than head */
-  if (node->frequency < list->head->frequency) {
-    node->next = list->head;
-    list->head = node;
-    list->size++;
-    return;
-  }
-
-  /* Finds the correct position to insert */
-  HuffNode *curr = list->head;
-  while (curr->next != NULL && curr->next->frequency <= node->frequency)
-    curr = curr->next;
-
-  /* Insert node at the correct position */
-  node->next = curr->next;
-  curr->next = node;
-  list->size++;
-}
-
-/* Removes the head from a LinkedList */
-HuffNode *remove_head(LinkedList *list) {
-  if (list->head == NULL)
-    return NULL;
-  HuffNode *tmp = list->head;
-  list->head = tmp->next;
-  tmp->next = NULL;
-  return tmp;
-}
-
 /* Checks if a HuffNode is a leaf */
 int is_leaf(HuffNode *node) {
   return (node->left == NULL && node->right == NULL);
-}
-
-/* Creates an empty LinkedList */
-LinkedList *create_linkedlist() {
-  LinkedList *list = (LinkedList *)malloc(sizeof(LinkedList));
-  list->size = 0;
-  list->head = NULL;
-  return list;
-}
-
-/* Frees the memory allocated for a LinkedList */
-void free_list(HuffNode *head) {
-  while (head != NULL) {
-    HuffNode *curr = head;
-    head = head->next;
-    free(curr);
-  }
-}
-
-/* Prints a LinkedList */
-void print_list(LinkedList *list) {
-  HuffNode *curr = list->head;
-  while (curr != NULL) {
-    printf("node: %c | freq: %d\n", curr->data, curr->frequency);
-    curr = curr->next;
-  }
 }
 
 // Sets the frequency for each char in the file
@@ -113,39 +121,47 @@ void char_frequency(FILE *fp, int *frequency) {
 }
 
 /* Creates a frequency list from the input file */
-LinkedList *frequency_list(FILE *input_file) {
-  LinkedList *list = (LinkedList *)malloc(sizeof(LinkedList));
-  if (list == NULL)
+Heap *frequency_list(FILE *input_file) {
+  Heap *heap = init_heap(MAX_CHARS);
+  if (heap == NULL)
     return NULL;
-  list->head = NULL;
 
   int frequency[MAX_CHARS] = {0};
   char_frequency(input_file, frequency);
 
+  /* int total_chars = 0; */
   for (int i = 0; i < MAX_CHARS; i++) {
     if (frequency[i] > 0) {
-      HuffNode *new_node = create_node(i, frequency[i]);
-      if (new_node == NULL) {
-        free_list(list->head);
-        free(list);
+      /* printf("char '%c'\tascii: %d\tfrequency: %d\n", i, i, frequency[i]); */
+      /* total_chars++; */
+      HuffNode *node = create_node(i, frequency[i]);
+      if (node == NULL) {
+        free_heap(heap);
         return NULL;
       }
-      insert_node(list, new_node);
+      insert_heap(heap, node);
     }
   }
 
-  return list;
+  /* printf("unique characters: %d\n", total_chars); */
+  /* printf("heap size: %d\n", heap->size); */
+
+  return heap;
 }
 
-/* Builds a Huffman Tree using a Linked List */
-void huffman_tree(LinkedList *list) {
-  while (list->head != NULL && list->head->next != NULL) {
-    /* Creates a new node (parent) with the summed frequency of the first two */
-    HuffNode *left = remove_head(list), *right = remove_head(list);
-    HuffNode *parent = create_node('\0', left->frequency + right->frequency);
-    parent->left = left, parent->right = right;
+void build_huffman_tree(Heap *heap) {
+  /* printf("build_huffman_tree heap size: %d\n", heap->size); */
 
-    insert_node(list, parent);
+  while (heap->size > 1) {
+    HuffNode *left = extract_min(heap);
+    HuffNode *right = extract_min(heap);
+
+    HuffNode *parent = create_node('\0', left->frequency + right->frequency);
+    parent->left = left;
+    parent->right = right;
+
+    insert_heap(heap, parent);
+    /* printf("Heap size after step %d: %d\n", step, heap->size); */
   }
 }
 
@@ -157,10 +173,14 @@ void encode_tree(HuffNode *root, char bitstream[], int pos, int code_length[],
 
   if (is_leaf(root)) {
     code_length[root->data] = pos;
-
     unsigned curr_code = 0;
+
+    /* printf("char '%c' freq: %u\n", root->data, root->frequency); */
+
     for (int i = 0; i < pos; i++)
       curr_code = (curr_code << 1) | (bitstream[i] == '1');
+    /* printf("%c", bitstream[i]); // print the bits */
+
     codes[root->data] = curr_code;
     total_bits += (pos * root->frequency);
   }
@@ -178,7 +198,8 @@ void write_bit(FILE *output, int bit) {
   bit_count++;
 
   if (bit_count == 8) {
-    fputc(bit_buffer, output);
+    if (fputc(bit_buffer, output) == EOF)
+      printf("Error writing byte to output file\n");
     bit_buffer = 0;
     bit_count = 0;
   }
@@ -213,20 +234,17 @@ void clear_bits(FILE *output) {
 }
 
 /* Write the compression header with character frequencies */
-void write_header(FILE *output, LinkedList *list) {
+void write_header(FILE *output, Heap *heap) {
   /* Write number of distinct characters */
-  unsigned char num_chars = list->size;
+  unsigned char num_chars = heap->size;
   fwrite(&num_chars, sizeof(unsigned char), 1, output);
 
   /* Write each character and its frequency */
-  HuffNode *curr = list->head;
-  while (curr != NULL) {
-    if (is_leaf(curr)) {
-      fwrite(&curr->data, sizeof(char), 1, output);
-      fwrite(&curr->frequency, sizeof(unsigned), 1, output);
+  for (int i = 0; i < heap->size; i++)
+    if (is_leaf(heap->array[i])) {
+      fwrite(&heap->array[i]->data, sizeof(char), 1, output);
+      fwrite(&heap->array[i]->frequency, sizeof(unsigned), 1, output);
     }
-    curr = curr->next;
-  }
 }
 
 /* Compress the input file using the generated codes */
@@ -244,16 +262,16 @@ int compress(const char *input_filename, const char *output_filename) {
     return -1;
   }
 
+  printf("Compressing...\n");
   // Initialize the frequency list
-  LinkedList *list = frequency_list(input);
-  if (list == NULL) {
-    printf("Error: Could not create frequency list\n");
+  Heap *heap = frequency_list(input);
+  if (heap == NULL) {
     fclose(input);
     fclose(output);
     return -1;
   }
 
-  write_header(output, list);
+  write_header(output, heap);
 
   // Initialize arrays for encoding
   int code_length[MAX_CHARS] = {0};
@@ -261,8 +279,8 @@ int compress(const char *input_filename, const char *output_filename) {
   char bitstream[MAX_CHARS];
 
   // Build Huffman tree and encode
-  huffman_tree(list);
-  encode_tree(list->head, bitstream, 0, code_length, codes);
+  build_huffman_tree(heap);
+  encode_tree(heap->array[0], bitstream, 0, code_length, codes);
 
   // Write compressed data
   rewind(input);
@@ -279,12 +297,12 @@ int compress(const char *input_filename, const char *output_filename) {
   }
   clear_bits(output);
 
-  print_statistics(list, input_filename, output_filename);
+  print_statistics(heap, input_filename, output_filename);
 
-  free_list(list->head);
-  free(list);
+  free_heap(heap);
   fclose(input);
   fclose(output);
+  printf("INFO: Successfully compressed\n");
 
   return 0;
 }
@@ -300,7 +318,8 @@ int decompress(const char *input_filename, const char *output_filename) {
     return -1;
   }
 
-  LinkedList *list = create_linkedlist();
+  printf("Decompressing...\n");
+  Heap *heap = init_heap(2 * num_chars - 1);
 
   for (int i = 0; i < num_chars; i++) {
     char character;
@@ -309,19 +328,18 @@ int decompress(const char *input_filename, const char *output_filename) {
     if (fread(&character, sizeof(char), 1, input) != 1 ||
         fread(&frequency, sizeof(unsigned), 1, input) != 1) {
       printf("ERROR: reading char and frequency failed.");
-      free_list(list->head);
-      free(list);
+      free_heap(heap);
       fclose(input);
       fclose(output);
       return -1;
     }
 
     HuffNode *node = create_node(character, frequency);
-    insert_node(list, node);
+    insert_heap(heap, node);
   }
 
-  huffman_tree(list);
-  HuffNode *root = list->head;
+  build_huffman_tree(heap);
+  HuffNode *root = heap->array[0];
   HuffNode *curr = root;
 
   /* Read compressed data bit by bit */
@@ -330,17 +348,16 @@ int decompress(const char *input_filename, const char *output_filename) {
     /* If bit equals 0, go left, if 1, go right */
     curr = (bit == 0) ? curr->left : curr->right;
 
-    /* Reached a leaf node */
     if (is_leaf(curr)) {
       fputc(curr->data, output); // Write char to output
       curr = root;               // Go back to root for next char
     }
   }
 
-  free_list(list->head);
-  free(list);
+  free_heap(heap);
   fclose(input);
   fclose(output);
+  printf("INFO: Successfully decompressed\n");
 
   return 0;
 }
@@ -365,13 +382,14 @@ void print_usage(const char *program) {
 }
 
 /* Prints the size of both compressed and uncompressed files */
-void print_statistics(LinkedList *list, const char *input_filename,
+void print_statistics(Heap *heap, const char *input_filename,
                       const char *output_filename) {
   long uncompressed = get_file_size(input_filename);
   long compressed = get_file_size(output_filename);
 
+  printf("\nHuffman Coding (Heap as Priority Queue)");
   printf("\nBits:\n");
-  printf("uncompressed: %d\n", list->head->frequency * 8);
+  printf("uncompressed: %d\n", heap->array[0]->frequency * 8);
   printf("compressed: %d\n", total_bits);
   printf("\nBytes:\n");
   printf("uncompressed size: %ld\n", uncompressed);
